@@ -1,5 +1,5 @@
 // ============================================
-//   GITA WISDOM — Main Server (Complete)
+//   GITA WISDOM — Main Server (PRODUCTION READY)
 // ============================================
 
 require('dotenv').config();
@@ -36,10 +36,25 @@ app.use(helmet({
 }));
 
 // ─────────────────────────────────────────────
-//  CORS Configuration
+//  CORS Configuration - FIXED ✅
 // ─────────────────────────────────────────────
+const allowedOrigins = [
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+  'http://localhost:3000',
+  'https://bhagwat-gyan.netlify.app'
+];
+
 app.use(cors({
-  origin: ['http://localhost:5500', 'http://127.0.0.1:5500', 'http://localhost:3000'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -82,8 +97,8 @@ app.use(passport.session());
 //  Rate Limiting
 // ─────────────────────────────────────────────
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 10,
   message: {
     success: false,
     message: 'Too many attempts, please try again after 15 minutes'
@@ -92,7 +107,6 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// Apply rate limiting to auth routes
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
@@ -130,45 +144,21 @@ app.use((req, res) => {
 // ─────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error('❌ Server Error:', err);
-
-  // Mongoose duplicate key error
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern)[0];
-    return res.status(400).json({
-      success: false,
-      message: `${field} already exists. Please use a different ${field}.`
-    });
+    return res.status(400).json({ success: false, message: `${field} already exists.` });
   }
-
-  // Mongoose validation error
   if (err.name === 'ValidationError') {
     const errors = Object.values(err.errors).map(e => e.message);
-    return res.status(400).json({
-      success: false,
-      message: errors.join(', ')
-    });
+    return res.status(400).json({ success: false, message: errors.join(', ') });
   }
-
-  // JWT errors
-  if (err.name === 'JsonWebTokenError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid token. Please login again.'
-    });
+  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
-
-  if (err.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Token expired. Please login again.'
-    });
+  if (err.message.includes('CORS')) {
+    return res.status(403).json({ success: false, message: err.message });
   }
-
-  // Default error
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal server error'
-  });
+  res.status(err.status || 500).json({ success: false, message: err.message || 'Internal server error' });
 });
 
 // ─────────────────────────────────────────────
