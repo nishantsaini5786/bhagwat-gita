@@ -61,3 +61,10 @@ router.post('/mood', logMood);
 router.get('/moods', getMoods);
 
 module.exports = router;
+
+// routes/userRoutes.js - Add this line
+const upload = require('../utils/upload');
+const { uploadAvatar } = require('../controllers/uploadController');
+
+// Add this route (after other routes)
+router.post('/avatar', upload.single('avatar'), uploadAvatar);
