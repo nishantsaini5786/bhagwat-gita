@@ -1,4 +1,6 @@
-// controllers/authController.js (Complete - already provided, but here's the enhanced version)
+// controllers/authController.js - COMPLETE FIXED VERSION
+// Email verification DISABLED for testing - users auto-verified
+
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -15,7 +17,7 @@ const {
 } = require('../utils/emailService');
 
 // ─────────────────────────────────────────────
-//  Register new user
+//  Register new user (AUTO-VERIFIED)
 // ─────────────────────────────────────────────
 exports.register = async (req, res) => {
   try {
@@ -30,33 +32,30 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Generate verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpire = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-    // Create user
+    // Create user - AUTO VERIFIED (no email verification needed)
     const user = await User.create({
       name,
       email,
       password,
       age: age || undefined,
       phone: phone || undefined,
-      verificationToken,
-      verificationTokenExpire
+      isVerified: true, // ✅ AUTO-VERIFIED! No email needed
+      verificationToken: undefined,
+      verificationTokenExpire: undefined
     });
 
-    // Send verification email
+    // Optional: Send welcome email (but don't wait for it)
     try {
-      await sendVerificationEmail(user, verificationToken);
+      await sendWelcomeEmail(user);
     } catch (emailErr) {
-      console.error('Email send failed:', emailErr);
+      console.error('Welcome email failed:', emailErr);
       // Don't fail registration if email fails
     }
 
     res.status(201).json({
       success: true,
-      message: `Account created! Please verify your email (${email}) to continue.`,
-      needsVerification: true
+      message: `Account created successfully! You can now login.`,
+      needsVerification: false // ✅ No verification needed
     });
 
   } catch (err) {
@@ -69,7 +68,7 @@ exports.register = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────
-//  Login
+//  Login (NO VERIFICATION REQUIRED)
 // ─────────────────────────────────────────────
 exports.login = async (req, res) => {
   try {
@@ -102,14 +101,11 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check verification
+    // ✅ AUTO-VERIFY if somehow not verified (backward compatibility)
     if (!user.isVerified) {
-      return res.status(403).json({
-        success: false,
-        message: 'Please verify your email first. Check your inbox.',
-        needsVerification: true,
-        email: user.email
-      });
+      user.isVerified = true;
+      await user.save();
+      console.log(`✅ Auto-verified user during login: ${user.email}`);
     }
 
     // Generate tokens
@@ -200,7 +196,7 @@ exports.getMe = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────
-//  Verify email
+//  Verify email (KEPT FOR COMPATIBILITY - but auto-verifies)
 // ─────────────────────────────────────────────
 exports.verifyEmail = async (req, res) => {
   try {
@@ -212,10 +208,8 @@ exports.verifyEmail = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: 'Verification link is invalid or has expired. Please register again.'
-      });
+      // Instead of error, just redirect to login (verification not needed)
+      return res.redirect(`${process.env.FRONTEND_URL}/login.html?verified=auto`);
     }
 
     // Verify user
@@ -224,7 +218,7 @@ exports.verifyEmail = async (req, res) => {
     user.verificationTokenExpire = undefined;
     await user.save();
 
-    // Send welcome email
+    // Send welcome email (optional)
     try {
       await sendWelcomeEmail(user);
     } catch (emailErr) {
@@ -245,7 +239,7 @@ exports.verifyEmail = async (req, res) => {
 
   } catch (err) {
     console.error('Verify email error:', err);
-    res.redirect(`${process.env.FRONTEND_URL}/login.html?error=verification_failed`);
+    res.redirect(`${process.env.FRONTEND_URL}/login.html`);
   }
 };
 
@@ -411,6 +405,12 @@ exports.refreshToken = async (req, res) => {
 exports.googleCallback = async (req, res) => {
   try {
     const user = req.user;
+
+    // Ensure user is verified (Google accounts are trusted)
+    if (!user.isVerified) {
+      user.isVerified = true;
+      await user.save();
+    }
 
     // Generate tokens
     const accessToken = generateAccessToken(user._id);
