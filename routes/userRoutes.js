@@ -1,6 +1,7 @@
 // routes/userRoutes.js
 const express = require('express');
 const router = express.Router();
+const upload = require('../utils/upload');
 const {
   updateProfile,
   nextShlok,
@@ -15,56 +16,47 @@ const {
   getBookmarks,
   getMoods
 } = require('../controllers/userController');
+const {
+  uploadAvatar,
+  deleteAvatar,
+  getAvatarInfo
+} = require('../controllers/uploadController');
 const { protect, requireVerified } = require('../middleware/auth');
 const { validate, profileValidation, passwordChangeValidation } = require('../middleware/validate');
 const { apiLimiter } = require('../middleware/rateLimiter');
 
-// All user routes require authentication
+// ===== ALL USER ROUTES REQUIRE AUTHENTICATION =====
 router.use(protect);
 router.use(requireVerified);
 router.use(apiLimiter);
 
-// ─────────────────────────────────────────────
-//  Profile Management
-// ─────────────────────────────────────────────
+// ===== PROFILE MANAGEMENT =====
 router.put('/profile', validate(profileValidation), updateProfile);
 router.put('/change-password', validate(passwordChangeValidation), changePassword);
 router.delete('/account', deleteAccount);
 
-// ─────────────────────────────────────────────
-//  Progress & Stats
-// ─────────────────────────────────────────────
+// ===== AVATAR MANAGEMENT =====
+router.post('/avatar', upload.single('avatar'), uploadAvatar);
+router.delete('/avatar', deleteAvatar);
+router.get('/avatar/info', getAvatarInfo);
+
+// ===== PROGRESS & STATS =====
 router.get('/stats', getStats);
 router.post('/next-shlok', nextShlok);
 
-// ─────────────────────────────────────────────
-//  Favorites
-// ─────────────────────────────────────────────
+// ===== FAVORITES =====
 router.post('/favorite', toggleFavorite);
 router.get('/favorites', getFavorites);
 
-// ─────────────────────────────────────────────
-//  Bookmarks
-// ─────────────────────────────────────────────
+// ===== BOOKMARKS =====
 router.post('/bookmark', toggleBookmark);
 router.get('/bookmarks', getBookmarks);
 
-// ─────────────────────────────────────────────
-//  History
-// ─────────────────────────────────────────────
+// ===== HISTORY =====
 router.get('/history', getHistory);
 
-// ─────────────────────────────────────────────
-//  Mood Journal
-// ─────────────────────────────────────────────
+// ===== MOOD JOURNAL =====
 router.post('/mood', logMood);
 router.get('/moods', getMoods);
 
 module.exports = router;
-
-// routes/userRoutes.js - Add this line
-const upload = require('../utils/upload');
-const { uploadAvatar } = require('../controllers/uploadController');
-
-// Add this route (after other routes)
-router.post('/avatar', upload.single('avatar'), uploadAvatar);
